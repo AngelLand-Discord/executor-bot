@@ -32,13 +32,9 @@ intents.guilds = True
 bot = commands.Bot(command_prefix=PREFIX, intents=intents)
 
 # =====================
-# DATABASE (STABLE)
+# DATABASE
 # =====================
-DB = sqlite3.connect(
-    "bot.db",
-    isolation_level=None,
-    check_same_thread=False
-)
+DB = sqlite3.connect("bot.db", isolation_level=None, check_same_thread=False)
 DB.row_factory = sqlite3.Row
 CUR = DB.cursor()
 
@@ -81,24 +77,50 @@ def now():
 
 def log_db(action, target, moderator, reason=""):
     CUR.execute(
-        """
-        INSERT INTO modlogs (action, target, moderator, reason, timestamp)
-        VALUES (?, ?, ?, ?, ?)
-        """,
+        """INSERT INTO modlogs (action, target, moderator, reason, timestamp)
+           VALUES (?, ?, ?, ?, ?)""",
         (action, target, moderator, reason, now().isoformat())
     )
+
+def build_log_embed(
+    title: str,
+    target: discord.Member,
+    moderator: discord.Member,
+    reason: str,
+    duration: str | None = None
+):
+    embed = discord.Embed(
+        title=title,
+        color=discord.Color.dark_gray(),
+        timestamp=now()
+    )
+    embed.add_field(
+        name="Target",
+        value=f"{target} (`{target.id}`)",
+        inline=False
+    )
+    embed.add_field(
+        name="Moderator",
+        value=f"{moderator} (`{moderator.id}`)",
+        inline=False
+    )
+    if duration:
+        embed.add_field(
+            name="Duration",
+            value=duration,
+            inline=False
+        )
+    embed.add_field(
+        name="Reason",
+        value=reason or "No reason provided",
+        inline=False
+    )
+    return embed
 
 async def log_embed(guild, embed):
     channel = guild.get_channel(LOG_CHANNEL_ID)
     if channel:
         await channel.send(embed=embed)
-
-def clean_embed(title):
-    return discord.Embed(
-        title=title,
-        color=discord.Color.dark_gray(),
-        timestamp=now()
-    )
 
 # =====================
 # OWNER LOCKS
@@ -121,7 +143,7 @@ async def slash_error(interaction, error):
         )
 
 # =====================
-# SILENCE COMMAND NOT FOUND
+# SILENCE UNKNOWN COMMANDS
 # =====================
 @bot.event
 async def on_command_error(ctx, error):
@@ -136,7 +158,6 @@ async def schedule_unban(user_id, when):
     delay = (when - now()).total_seconds()
     if delay < 0:
         delay = 0
-
     await asyncio.sleep(delay)
 
     for guild in bot.guilds:
@@ -182,11 +203,17 @@ async def judgement_core(guild, moderator, member, reason):
     await member.remove_roles(*roles, reason=reason)
     log_db("judgement", member.id, moderator.id, reason)
 
-    embed = clean_embed("JUDGEMENT EXECUTED")
-    embed.add_field(name="Target", value=member, inline=False)
-    embed.add_field(name="Moderator", value=moderator, inline=False)
-    embed.add_field(name="Roles Removed", value=len(roles), inline=False)
-    embed.add_field(name="Reason", value=reason, inline=False)
+    embed = build_log_embed(
+        "JUDGEMENT EXECUTED",
+        member,
+        moderator,
+        reason
+    )
+    embed.add_field(
+        name="Roles Removed",
+        value=str(len(roles)),
+        inline=False
+    )
 
     await log_embed(guild, embed)
     return True, None
@@ -211,11 +238,14 @@ async def restore(ctx, member: discord.Member):
     await member.add_roles(*roles)
 
     CUR.execute("DELETE FROM judgements WHERE user_id=?", (member.id,))
-    log_db("restore", member.id, ctx.author.id)
+    log_db("restore", member.id, ctx.author.id, "Roles restored")
 
-    embed = clean_embed("ROLES RESTORED")
-    embed.add_field(name="Target", value=member)
-    embed.add_field(name="Moderator", value=ctx.author)
+    embed = build_log_embed(
+        "ROLES RESTORED",
+        member,
+        ctx.author,
+        "Roles restored"
+    )
     await log_embed(ctx.guild, embed)
 
     await ctx.send(f"♻️ Roles restored for {member.mention}")
@@ -224,11 +254,16 @@ async def restore(ctx, member: discord.Member):
 async def mute(ctx, member: discord.Member, minutes: int = 10, *, reason="Muted"):
     until = now() + timedelta(minutes=minutes)
     await member.timeout(until, reason=reason)
+
     log_db("mute", member.id, ctx.author.id, reason)
 
-    embed = clean_embed("USER MUTED")
-    embed.add_field(name="User", value=member)
-    embed.add_field(name="Duration", value=f"{minutes} minutes")
+    embed = build_log_embed(
+        "USER MUTED",
+        member,
+        ctx.author,
+        reason,
+        duration=f"{minutes} minutes"
+    )
     await log_embed(ctx.guild, embed)
 
     await ctx.send(f"🔇 {member.mention} muted.")
@@ -236,10 +271,15 @@ async def mute(ctx, member: discord.Member, minutes: int = 10, *, reason="Muted"
 @bot.command()
 async def unmute(ctx, member: discord.Member):
     await member.timeout(None)
-    log_db("unmute", member.id, ctx.author.id)
 
-    embed = clean_embed("USER UNMUTED")
-    embed.add_field(name="User", value=member)
+    log_db("unmute", member.id, ctx.author.id, "Manual unmute")
+
+    embed = build_log_embed(
+        "USER UNMUTED",
+        member,
+        ctx.author,
+        "Manual unmute"
+    )
     await log_embed(ctx.guild, embed)
 
     await ctx.send(f"🔊 {member.mention} unmuted.")
@@ -247,11 +287,15 @@ async def unmute(ctx, member: discord.Member):
 @bot.command()
 async def ban(ctx, member: discord.Member, *, reason="Banned"):
     await member.ban(reason=reason)
+
     log_db("ban", member.id, ctx.author.id, reason)
 
-    embed = clean_embed("USER BANNED")
-    embed.add_field(name="User", value=member)
-    embed.add_field(name="Reason", value=reason)
+    embed = build_log_embed(
+        "USER BANNED",
+        member,
+        ctx.author,
+        reason
+    )
     await log_embed(ctx.guild, embed)
 
     await ctx.send(f"🚫 {member} banned.")
@@ -269,41 +313,19 @@ async def tempban(ctx, member: discord.Member, minutes: int, *, reason="Tempban"
     asyncio.create_task(schedule_unban(member.id, until))
     log_db("tempban", member.id, ctx.author.id, reason)
 
-    embed = clean_embed("USER TEMPBANNED")
-    embed.add_field(name="User", value=member)
-    embed.add_field(name="Duration", value=f"{minutes} minutes")
+    embed = build_log_embed(
+        "USER TEMPBANNED",
+        member,
+        ctx.author,
+        reason,
+        duration=f"{minutes} minutes"
+    )
     await log_embed(ctx.guild, embed)
 
     await ctx.send(f"⏳ {member} tempbanned.")
 
-@bot.command()
-async def userinfo(ctx, member: discord.Member = None):
-    member = member or ctx.author
-
-    CUR.execute("""
-        SELECT action, COUNT(*) c
-        FROM modlogs
-        WHERE target=?
-        GROUP BY action
-    """, (member.id,))
-    history = "\n".join(f"{r['action']}: {r['c']}" for r in CUR.fetchall()) or "Clean record"
-
-    CUR.execute(
-        "SELECT count FROM invites WHERE guild_id=? AND user_id=?",
-        (ctx.guild.id, member.id)
-    )
-    row = CUR.fetchone()
-    invites = row["count"] if row else 0
-
-    embed = clean_embed("USER INFO")
-    embed.add_field(name="User", value=member, inline=False)
-    embed.add_field(name="Invites", value=invites, inline=False)
-    embed.add_field(name="Mod History", value=history, inline=False)
-
-    await ctx.send(embed=embed)
-
 # =====================
-# SLASH COMMANDS
+# SLASH COMMAND (JUDGEMENT)
 # =====================
 @bot.tree.command(name="judgement", description="Remove all roles from a member")
 @app_commands.check(only_owner_slash)
@@ -319,8 +341,7 @@ async def judgement_reason_auto(_, current):
     reasons = ["Rule violation", "Abuse", "Spam", "Harassment", "Staff decision"]
     return [
         app_commands.Choice(name=r, value=r)
-        for r in reasons
-        if current.lower() in r.lower()
+        for r in reasons if current.lower() in r.lower()
     ]
 
 # =====================
