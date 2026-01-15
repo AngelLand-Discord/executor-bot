@@ -32,7 +32,7 @@ intents.guilds = True
 bot = commands.Bot(command_prefix=PREFIX, intents=intents)
 
 # =====================
-# DATABASE (FIXED)
+# DATABASE (STABLE)
 # =====================
 DB = sqlite3.connect(
     "bot.db",
@@ -119,6 +119,15 @@ async def slash_error(interaction, error):
             "You are not authorized to use this bot.",
             ephemeral=True
         )
+
+# =====================
+# SILENCE COMMAND NOT FOUND
+# =====================
+@bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.CommandNotFound):
+        return
+    raise error
 
 # =====================
 # TEMPBAN SCHEDULER
