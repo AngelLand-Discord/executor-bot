@@ -81,16 +81,17 @@ def now():
 
 def log_db(action, target, moderator, reason=""):
     CUR.execute(
-        """INSERT INTO modlogs
-           (action, target, moderator, reason, timestamp)
-           VALUES (?, ?, ?, ?, ?)""",
+        """
+        INSERT INTO modlogs (action, target, moderator, reason, timestamp)
+        VALUES (?, ?, ?, ?, ?)
+        """,
         (action, target, moderator, reason, now().isoformat())
     )
 
 async def log_embed(guild, embed):
-    ch = guild.get_channel(LOG_CHANNEL_ID)
-    if ch:
-        await ch.send(embed=embed)
+    channel = guild.get_channel(LOG_CHANNEL_ID)
+    if channel:
+        await channel.send(embed=embed)
 
 def clean_embed(title):
     return discord.Embed(
@@ -100,7 +101,7 @@ def clean_embed(title):
     )
 
 # =====================
-# OWNER LOCK (GLOBAL)
+# OWNER LOCKS
 # =====================
 @bot.check
 async def only_owner_prefix(ctx):
@@ -110,8 +111,6 @@ async def only_owner_slash(interaction: discord.Interaction):
     if interaction.user.id != OWNER_ID:
         raise app_commands.CheckFailure
     return True
-
-bot.tree.add_check(only_owner_slash)
 
 @bot.tree.error
 async def slash_error(interaction, error):
@@ -128,11 +127,12 @@ async def schedule_unban(user_id, when):
     delay = (when - now()).total_seconds()
     if delay < 0:
         delay = 0
+
     await asyncio.sleep(delay)
 
-    for g in bot.guilds:
+    for guild in bot.guilds:
         try:
-            await g.unban(discord.Object(id=user_id))
+            await guild.unban(discord.Object(id=user_id))
         except:
             pass
 
@@ -144,14 +144,16 @@ async def schedule_unban(user_id, when):
 @bot.event
 async def on_ready():
     await bot.tree.sync()
+
     CUR.execute("SELECT user_id, unban_time FROM tempbans")
-    for r in CUR.fetchall():
+    for row in CUR.fetchall():
         asyncio.create_task(
             schedule_unban(
-                r["user_id"],
-                datetime.fromisoformat(r["unban_time"])
+                row["user_id"],
+                datetime.fromisoformat(row["unban_time"])
             )
         )
+
     print(f"Online as {bot.user}")
 
 # =====================
@@ -169,7 +171,6 @@ async def judgement_core(guild, moderator, member, reason):
         )
 
     await member.remove_roles(*roles, reason=reason)
-
     log_db("judgement", member.id, moderator.id, reason)
 
     embed = clean_embed("JUDGEMENT EXECUTED")
@@ -204,10 +205,10 @@ async def restore(ctx, member: discord.Member):
     log_db("restore", member.id, ctx.author.id)
 
     embed = clean_embed("ROLES RESTORED")
-    embed.add_field(name="Target", value=member, inline=False)
-    embed.add_field(name="Moderator", value=ctx.author, inline=False)
-
+    embed.add_field(name="Target", value=member)
+    embed.add_field(name="Moderator", value=ctx.author)
     await log_embed(ctx.guild, embed)
+
     await ctx.send(f"♻️ Roles restored for {member.mention}")
 
 @bot.command()
@@ -271,10 +272,10 @@ async def userinfo(ctx, member: discord.Member = None):
     member = member or ctx.author
 
     CUR.execute("""
-    SELECT action, COUNT(*) c
-    FROM modlogs
-    WHERE target=?
-    GROUP BY action
+        SELECT action, COUNT(*) c
+        FROM modlogs
+        WHERE target=?
+        GROUP BY action
     """, (member.id,))
     history = "\n".join(f"{r['action']}: {r['c']}" for r in CUR.fetchall()) or "Clean record"
 
@@ -295,15 +296,23 @@ async def userinfo(ctx, member: discord.Member = None):
 # =====================
 # SLASH COMMANDS
 # =====================
-@bot.tree.command(name="judgement")
+@bot.tree.command(name="judgement", description="Remove all roles from a member")
+@app_commands.check(only_owner_slash)
 async def slash_judgement(interaction, member: discord.Member, reason: str = "Judgement passed"):
     ok, err = await judgement_core(interaction.guild, interaction.user, member, reason)
-    await interaction.response.send_message(err if not ok else "Judgement executed.", ephemeral=True)
+    await interaction.response.send_message(
+        err if not ok else "Judgement executed.",
+        ephemeral=True
+    )
 
 @slash_judgement.autocomplete("reason")
 async def judgement_reason_auto(_, current):
     reasons = ["Rule violation", "Abuse", "Spam", "Harassment", "Staff decision"]
-    return [app_commands.Choice(name=r, value=r) for r in reasons if current.lower() in r.lower()]
+    return [
+        app_commands.Choice(name=r, value=r)
+        for r in reasons
+        if current.lower() in r.lower()
+    ]
 
 # =====================
 # INVITE TRACKING
@@ -311,10 +320,10 @@ async def judgement_reason_auto(_, current):
 @bot.event
 async def on_member_join(member):
     CUR.execute("""
-    INSERT INTO invites (guild_id, user_id, count)
-    VALUES (?, ?, 1)
-    ON CONFLICT(guild_id, user_id)
-    DO UPDATE SET count = count + 1
+        INSERT INTO invites (guild_id, user_id, count)
+        VALUES (?, ?, 1)
+        ON CONFLICT(guild_id, user_id)
+        DO UPDATE SET count = count + 1
     """, (member.guild.id, member.id))
 
 # =====================
