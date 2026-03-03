@@ -3,6 +3,7 @@ from discord.ext import commands
 import os
 import threading
 from flask import Flask
+import asyncio
 
 # =========================
 # ENV VARIABLES
@@ -52,6 +53,31 @@ async def dm(ctx, member: discord.Member, *, message: str):
     active_dm_sessions[member.id] = ctx.channel.id
     await ctx.send("DM sent.")
 
+@bot.command(name="announce")
+@commands.has_permissions(administrator=True)
+async def announce(ctx, role: discord.Role, *, message: str):
+    success = 0
+    failed = 0
+
+    await ctx.send(f"Sending announcement to {role.name}...")
+
+    for member in role.members:
+        if member.bot:
+            continue
+
+        try:
+            await member.send(message)
+            success += 1
+            await asyncio.sleep(0.5)  # safer delay
+        except Exception:
+            failed += 1
+
+    await ctx.send(
+        f"Announcement complete.\n"
+        f"✅ Sent: {success}\n"
+        f"❌ Failed (DMs closed): {failed}"
+    )
+
 @bot.event
 async def on_message(message):
     if message.author.bot:
@@ -74,4 +100,5 @@ async def on_message(message):
 if __name__ == "__main__":
     threading.Thread(target=run_web).start()
     bot.run(TOKEN)
+
 
