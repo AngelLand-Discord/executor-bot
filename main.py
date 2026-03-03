@@ -11,7 +11,7 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 OWNER_ID = int(os.getenv("OWNER_ID"))
 PORT = int(os.getenv("PORT", 10000))
 
-PREFIX = "!"
+PREFIX = "tm "
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -74,3 +74,4 @@ async def on_message(message):
 if __name__ == "__main__":
     threading.Thread(target=run_web).start()
     bot.run(TOKEN)
+
