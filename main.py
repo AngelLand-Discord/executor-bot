@@ -11,14 +11,12 @@ from flask import Flask
 TOKEN = os.getenv("DISCORD_TOKEN")
 OWNER_ID = int(os.getenv("OWNER_ID"))
 PORT = int(os.getenv("PORT", 10000))
-
-# channel where ALL bot DMs get logged
 DM_LOG_CHANNEL = int(os.getenv("DM_LOG_CHANNEL"))
 
-PREFIX = "tm "
+PREFIX = "!"
 
 # =========================
-# DISCORD INTENTS
+# INTENTS
 # =========================
 intents = discord.Intents.default()
 intents.message_content = True
@@ -27,11 +25,10 @@ intents.dm_messages = True
 
 bot = commands.Bot(command_prefix=PREFIX, intents=intents)
 
-# store DM relay sessions
 active_dm_sessions = {}
 
 # =========================
-# FLASK SERVER (RENDER PORT)
+# FLASK SERVER (FOR RENDER)
 # =========================
 app = Flask(__name__)
 
@@ -43,39 +40,36 @@ def run_web():
     app.run(host="0.0.0.0", port=PORT)
 
 # =========================
-# READY EVENT
+# READY
 # =========================
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
-    print("Bot + Web server running.")
+    print("Bot running.")
 
 # =========================
-# OWNER CHECK
+# OWNER ONLY COMMANDS
 # =========================
 @bot.check
 async def only_owner(ctx):
     return ctx.author.id == OWNER_ID
 
 # =========================
-# DM COMMAND
+# DM USER
 # =========================
 @bot.command()
 async def dm(ctx, member: discord.Member, *, message: str):
 
     try:
         await member.send(message)
-
-        # store relay session
         active_dm_sessions[member.id] = ctx.channel.id
-
         await ctx.send(f"DM sent to {member.mention}")
 
     except Exception as e:
-        await ctx.send(f"Failed to send DM: {e}")
+        await ctx.send(f"Failed: {e}")
 
 # =========================
-# ROLE ANNOUNCEMENT
+# ANNOUNCE TO ROLE
 # =========================
 @bot.command()
 async def announce(ctx, role: discord.Role, *, message: str):
@@ -101,8 +95,21 @@ async def announce(ctx, role: discord.Role, *, message: str):
     await ctx.send(
         f"Announcement complete\n"
         f"Sent: {success}\n"
-        f"Failed (DM closed): {failed}"
+        f"Failed: {failed}"
     )
+
+# =========================
+# SEND MESSAGE TO CHANNEL
+# =========================
+@bot.command()
+async def msg(ctx, channel: discord.TextChannel, *, message: str):
+
+    try:
+        await channel.send(message)
+        await ctx.send(f"Message sent to {channel.mention}")
+
+    except Exception as e:
+        await ctx.send(f"Failed to send: {e}")
 
 # =========================
 # MESSAGE HANDLER
@@ -113,14 +120,11 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    # =========================
-    # HANDLE DMs
-    # =========================
     if isinstance(message.channel, discord.DMChannel):
 
         log_channel = bot.get_channel(DM_LOG_CHANNEL)
 
-        # relay replies to original channel
+        # Relay replies from DM sessions
         if message.author.id in active_dm_sessions:
 
             relay_channel_id = active_dm_sessions[message.author.id]
@@ -131,7 +135,7 @@ async def on_message(message):
                     f"Reply from {message.author.name}:\n{message.content}"
                 )
 
-        # log all DMs
+        # Log ALL DMs
         if log_channel:
             await log_channel.send(
                 f"DM received\n"
@@ -142,7 +146,7 @@ async def on_message(message):
     await bot.process_commands(message)
 
 # =========================
-# START BOTH SERVICES
+# START SERVICES
 # =========================
 if __name__ == "__main__":
 
