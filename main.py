@@ -13,7 +13,7 @@ OWNER_ID = int(os.getenv("OWNER_ID"))
 PORT = int(os.getenv("PORT", 10000))
 DM_LOG_CHANNEL = int(os.getenv("DM_LOG_CHANNEL"))
 
-PREFIX = "!"
+PREFIX = "tm "
 
 # =========================
 # INTENTS
@@ -24,8 +24,6 @@ intents.members = True
 intents.dm_messages = True
 
 bot = commands.Bot(command_prefix=PREFIX, intents=intents)
-
-active_dm_sessions = {}
 
 # =========================
 # FLASK SERVER (FOR RENDER)
@@ -62,7 +60,6 @@ async def dm(ctx, member: discord.Member, *, message: str):
 
     try:
         await member.send(message)
-        active_dm_sessions[member.id] = ctx.channel.id
         await ctx.send(f"DM sent to {member.mention}")
 
     except Exception as e:
@@ -112,7 +109,45 @@ async def msg(ctx, channel: discord.TextChannel, *, message: str):
         await ctx.send(f"Failed to send: {e}")
 
 # =========================
-# MESSAGE HANDLER
+# LOCK CHANNEL
+# =========================
+@bot.command()
+async def lock(ctx, channel: discord.TextChannel):
+
+    try:
+        everyone = ctx.guild.default_role
+
+        await channel.set_permissions(
+            everyone,
+            view_channel=False
+        )
+
+        await ctx.send(f"{channel.mention} locked.")
+
+    except Exception as e:
+        await ctx.send(f"Failed to lock: {e}")
+
+# =========================
+# UNLOCK CHANNEL
+# =========================
+@bot.command()
+async def unlock(ctx, channel: discord.TextChannel):
+
+    try:
+        everyone = ctx.guild.default_role
+
+        await channel.set_permissions(
+            everyone,
+            view_channel=True
+        )
+
+        await ctx.send(f"{channel.mention} unlocked.")
+
+    except Exception as e:
+        await ctx.send(f"Failed to unlock: {e}")
+
+# =========================
+# LOG ALL BOT DMs
 # =========================
 @bot.event
 async def on_message(message):
@@ -124,18 +159,6 @@ async def on_message(message):
 
         log_channel = bot.get_channel(DM_LOG_CHANNEL)
 
-        # Relay replies from DM sessions
-        if message.author.id in active_dm_sessions:
-
-            relay_channel_id = active_dm_sessions[message.author.id]
-            relay_channel = bot.get_channel(relay_channel_id)
-
-            if relay_channel:
-                await relay_channel.send(
-                    f"Reply from {message.author.name}:\n{message.content}"
-                )
-
-        # Log ALL DMs
         if log_channel:
             await log_channel.send(
                 f"DM received\n"
