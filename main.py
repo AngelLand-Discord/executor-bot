@@ -271,7 +271,7 @@ async def giveperm(ctx, role: discord.Role, permission: str):
 # REMOVE PERMISSION FROM ROLE
 # =========================
 @bot.command()
-async def removeperm(ctx, role: discord.Role, permission: str):
+async def remroleperm(ctx, role: discord.Role, permission: str):
 
     perms = role.permissions
 
@@ -331,6 +331,7 @@ if __name__ == "__main__":
     threading.Thread(target=run_web).start()
 
     bot.run(TOKEN)
+
 
 
 
