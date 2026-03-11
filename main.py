@@ -168,6 +168,44 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
+@bot.command()
+async def removeperm(ctx, member: discord.Member, permission: str):
+
+    guild = ctx.guild
+    role_name = f"deny_{permission}"
+
+    try:
+        # Check if role already exists
+        role = discord.utils.get(guild.roles, name=role_name)
+
+        if role is None:
+            perms = discord.Permissions.none()
+
+            # create role with the permission disabled
+            role = await guild.create_role(
+                name=role_name,
+                permissions=perms,
+                reason="Permission override role"
+            )
+
+        # apply channel overrides
+        for channel in guild.channels:
+            try:
+                overwrite = channel.overwrites_for(role)
+                setattr(overwrite, permission, False)
+                await channel.set_permissions(role, overwrite=overwrite)
+            except:
+                pass
+
+        await member.add_roles(role)
+
+        await ctx.send(
+            f"{member.mention} can no longer use **{permission}** anywhere."
+        )
+
+    except Exception as e:
+        await ctx.send(f"Failed: {e}")
+
 # =========================
 # START SERVICES
 # =========================
@@ -176,3 +214,4 @@ if __name__ == "__main__":
     threading.Thread(target=run_web).start()
 
     bot.run(TOKEN)
+
