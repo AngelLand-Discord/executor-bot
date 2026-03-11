@@ -244,6 +244,86 @@ async def restoreperm(ctx, member: discord.Member, permission: str):
         await ctx.send(f"Failed to restore permission: {e}")
 
 # =========================
+# GIVE PERMISSION TO ROLE
+# =========================
+@bot.command()
+async def giveperm(ctx, role: discord.Role, permission: str):
+
+    perms = role.permissions
+
+    if not hasattr(perms, permission):
+        await ctx.send("Invalid permission name.")
+        return
+
+    try:
+        setattr(perms, permission, True)
+        await role.edit(permissions=perms)
+
+        await ctx.send(
+            f"{role.mention} now has **{permission}** permission."
+        )
+
+    except Exception as e:
+        await ctx.send(f"Failed: {e}")
+
+
+# =========================
+# REMOVE PERMISSION FROM ROLE
+# =========================
+@bot.command()
+async def removeperm(ctx, role: discord.Role, permission: str):
+
+    perms = role.permissions
+
+    if not hasattr(perms, permission):
+        await ctx.send("Invalid permission name.")
+        return
+
+    try:
+        setattr(perms, permission, False)
+        await role.edit(permissions=perms)
+
+        await ctx.send(
+            f"Removed **{permission}** from {role.mention}."
+        )
+
+    except Exception as e:
+        await ctx.send(f"Failed: {e}")
+
+
+# =========================
+# REMOVE PERMISSION FROM ALL ROLES
+# =========================
+@bot.command()
+async def remallperm(ctx, permission: str):
+
+    guild = ctx.guild
+    updated = 0
+
+    for role in guild.roles:
+
+        if role.is_default():
+            continue
+
+        perms = role.permissions
+
+        if not hasattr(perms, permission):
+            continue
+
+        if getattr(perms, permission):
+
+            try:
+                setattr(perms, permission, False)
+                await role.edit(permissions=perms)
+                updated += 1
+            except:
+                pass
+
+    await ctx.send(
+        f"Removed **{permission}** from {updated} roles."
+    )
+
+# =========================
 # START SERVICES
 # =========================
 if __name__ == "__main__":
@@ -251,5 +331,6 @@ if __name__ == "__main__":
     threading.Thread(target=run_web).start()
 
     bot.run(TOKEN)
+
 
 
