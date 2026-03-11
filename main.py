@@ -206,6 +206,43 @@ async def removeperm(ctx, member: discord.Member, permission: str):
     except Exception as e:
         await ctx.send(f"Failed: {e}")
 
+@bot.command()
+async def restoreperm(ctx, member: discord.Member, permission: str):
+
+    guild = ctx.guild
+    role_name = f"deny_{permission}"
+
+    role = discord.utils.get(guild.roles, name=role_name)
+
+    if role is None:
+        await ctx.send("No override role found.")
+        return
+
+    try:
+        # remove role from member
+        if role in member.roles:
+            await member.remove_roles(role)
+
+        # remove channel overrides
+        for channel in guild.channels:
+            try:
+                overwrite = channel.overwrites_for(role)
+                setattr(overwrite, permission, None)
+                await channel.set_permissions(role, overwrite=overwrite)
+            except:
+                pass
+
+        # delete role if nobody has it anymore
+        if len(role.members) == 0:
+            await role.delete()
+
+        await ctx.send(
+            f"{member.mention} can use **{permission}** again."
+        )
+
+    except Exception as e:
+        await ctx.send(f"Failed to restore permission: {e}")
+
 # =========================
 # START SERVICES
 # =========================
@@ -214,4 +251,5 @@ if __name__ == "__main__":
     threading.Thread(target=run_web).start()
 
     bot.run(TOKEN)
+
 
