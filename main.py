@@ -329,8 +329,10 @@ async def remallperm(ctx, permission: str):
 if __name__ == "__main__":
 
     threading.Thread(target=run_web).start()
-
+    print("Starting Discord bot...")
+    print("Token loaded:", TOKEN is not None)
     bot.run(TOKEN)
+
 
 
 
