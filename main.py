@@ -13,7 +13,7 @@ OWNER_ID = int(os.getenv("OWNER_ID"))
 PORT = int(os.getenv("PORT", 10000))
 DM_LOG_CHANNEL = int(os.getenv("DM_LOG_CHANNEL"))
 
-PREFIX = "tm "
+PREFIX = "t "
 
 # =========================
 # INTENTS
